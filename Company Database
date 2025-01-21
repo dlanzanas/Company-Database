@@ -1,0 +1,219 @@
+import sqlite3
+
+def create_database():
+    # Connect to the database (or create it if it doesn't exist)
+    conn = sqlite3.connect('company.db')
+    cursor = conn.cursor()
+
+    # Create the Branch table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS Branch (
+        branch_id INTEGER PRIMARY KEY,
+        branch_name TEXT NOT NULL,
+        mgr_id INTEGER,
+        mgr_start_date TEXT
+    )''')
+
+    # Create the Employee table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS Employee (
+        emp_id INTEGER PRIMARY KEY,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        birth_date TEXT,
+        sex TEXT,
+        salary REAL,
+        super_id INTEGER,
+        branch_id INTEGER,
+        FOREIGN KEY (branch_id) REFERENCES Branch(branch_id)
+    )''')
+
+    # Create the Client table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS Client (
+        client_id INTEGER PRIMARY KEY,
+        client_name TEXT NOT NULL,
+        branch_id INTEGER,
+        FOREIGN KEY (branch_id) REFERENCES Branch(branch_id)
+    )''')
+
+    # Create the Works_With table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS Works_With (
+        emp_id INTEGER,
+        client_id INTEGER,
+        total_sales REAL,
+        PRIMARY KEY (emp_id, client_id),
+        FOREIGN KEY (emp_id) REFERENCES Employee(emp_id),
+        FOREIGN KEY (client_id) REFERENCES Client(client_id)
+    )''')
+
+    # Create the Supplier table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS Supplier (
+        branch_id INTEGER,
+        supplier_name TEXT,
+        supply_type TEXT,
+        PRIMARY KEY (branch_id, supplier_name),
+        FOREIGN KEY (branch_id) REFERENCES Branch(branch_id)
+    )''')
+
+    conn.commit()
+    conn.close()
+
+def insert_data():
+    # Insert data into the tables
+    conn = sqlite3.connect('company.db')
+    cursor = conn.cursor()
+
+    # Insert data into Branch table
+    cursor.executemany('''INSERT OR IGNORE INTO Branch (branch_id, branch_name, mgr_id, mgr_start_date)
+        VALUES (?, ?, ?, ?)''', [
+        (1, 'Corporate', 100, '2006-02-09'),
+        (2, 'Scranton', 102, '1992-04-06'),
+        (3, 'Stamford', 106, '1998-02-13')
+    ])
+
+    # Insert data into Employee table
+    cursor.executemany('''INSERT OR IGNORE INTO Employee (emp_id, first_name, last_name, birth_date, sex, salary, super_id, branch_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', [
+        (100, 'Marco', 'Wallace', '1967-11-17', 'M', 250000, None, 1),
+        (101, 'Jan', 'Levinson', '1961-05-11', 'F', 110000, 100, 1),
+        (102, 'Michael', 'Scott', '1964-03-15', 'M', 75000, 100, 2),
+        (103, 'Angela', 'Martin', '1971-06-25', 'F', 63000, 102, 2),
+        (104, 'Kelly', 'Kapoor', '1980-02-05', 'F', 55000, 102, 2),
+        (105, 'Stanley', 'Hudson', '1958-02-19', 'M', 69000, 102, 2),
+        (106, 'Josh', 'Porter', '1969-09-05', 'M', 78000, 100, 3),
+        (107, 'Andy', 'Bernard', '1973-07-22', 'M', 65000, 106, 3),
+        (108, 'Jim', 'Halpert', '1978-10-01', 'M', 71000, 106, 3)
+    ])
+
+    # Insert data into Client table
+    cursor.executemany('''INSERT OR IGNORE INTO Client (client_id, client_name, branch_id)
+        VALUES (?, ?, ?)''', [
+        (400, 'Dunmore Highschool', 2),
+        (401, 'Lackawana Country', 2),
+        (402, 'FedEx', 3),
+        (403, 'John Daly Law, LLC', 3),
+        (404, 'Scranton Whitepages', 2),
+        (405, 'Times Newspaper', 3),
+        (406, 'FedEx', 2)
+    ])
+
+    # Insert data into Works_With table
+    cursor.executemany('''INSERT OR IGNORE INTO Works_With (emp_id, client_id, total_sales)
+        VALUES (?, ?, ?)''', [
+        (105, 400, 55000),
+        (102, 401, 267000),
+        (108, 402, 22500),
+        (107, 403, 5000),
+        (108, 403, 12000),
+        (105, 404, 33000),
+        (107, 405, 26000),
+        (102, 406, 15000),
+        (105, 406, 130000)
+    ])
+
+    # Insert data into Supplier table
+    cursor.executemany('''INSERT OR IGNORE INTO Supplier (branch_id, supplier_name, supply_type)
+        VALUES (?, ?, ?)''', [
+        (2, 'Hammer Mill Paper', 'Paper'),
+        (2, 'Uni-ball', 'Writing Utensils'),
+        (3, 'Patriot Paper', 'Paper'),
+        (2, 'J.T. Forms & Labels', 'Custom Forms'),
+        (3, 'Uni-ball', 'Writing Utensils'),
+        (3, 'Hammer Mill Paper', 'Paper'),
+        (3, 'Stamford Lables', 'Custom Forms')
+    ])
+
+    conn.commit()
+    conn.close()
+
+def read_initial_data():
+    # Read initial data before any updates or deletions
+    conn = sqlite3.connect('company.db')
+    cursor = conn.cursor()
+
+    print("Initial Employee Data:")
+    cursor.execute('SELECT * FROM Employee')
+    for row in cursor.fetchall():
+        print(row)
+
+    print("\nInitial Client Data:")
+    cursor.execute('SELECT * FROM Client')
+    for row in cursor.fetchall():
+        print(row)
+
+    conn.close()
+
+def update_data():
+    # Update all employees' salaries based on total sales
+    conn = sqlite3.connect('company.db')
+    cursor = conn.cursor()
+
+    # Get all employees
+    cursor.execute('SELECT emp_id, salary FROM Employee')
+    employees = cursor.fetchall()
+
+    for emp_id, current_salary in employees:
+        # Calculate total sales for the employee
+        cursor.execute('''SELECT SUM(total_sales) FROM Works_With WHERE emp_id = ?''', (emp_id,))
+        total_sales = cursor.fetchone()[0] or 0  # Default to 0 if no sales found
+
+        # Update the salary by adding total sales
+        updated_salary = current_salary + total_sales
+        cursor.execute('''UPDATE Employee SET salary = ? WHERE emp_id = ?''', (updated_salary, emp_id))
+
+    conn.commit()
+
+    # Fetch and display updated data
+    cursor.execute('SELECT * FROM Employee')
+    print("\nUpdated Employee Data:")
+    for row in cursor.fetchall():
+        print(row)
+
+    conn.close()
+
+def delete_data():
+    # Delete data from the Client table
+    conn = sqlite3.connect('company.db')
+    cursor = conn.cursor()
+
+    # Delete FedEx client and confirm deletion
+    cursor.execute('''DELETE FROM Client WHERE client_id = ?''', (406,))
+    conn.commit()
+
+    # Fetch and display remaining clients
+    cursor.execute('SELECT * FROM Client')
+    print("\nRemaining Clients:")
+    for row in cursor.fetchall():
+        print(row)
+
+    conn.close()
+
+def read_data():
+    # Read data from the tables after updates and deletions
+    conn = sqlite3.connect('company.db')
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM Employee')
+    print("Employees:")
+    for row in cursor.fetchall():
+        print(row)
+
+    cursor.execute('SELECT * FROM Client')
+    print("\nClients:")
+    for row in cursor.fetchall():
+        print(row)
+
+    conn.close()
+
+# Main program starts here
+create_database()
+insert_data()
+
+print("Initial data:")
+read_initial_data()
+
+update_data()
+print("\nAfter update:")
+read_data()
+
+delete_data()
+print("\nAfter deletion:")
+read_data()
